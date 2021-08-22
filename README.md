@@ -150,12 +150,16 @@ Header-only library ,with allocation memory  only for generating an sql query
         //std::string
         
         std::tuple<int,float,std::string,A> t={555,0.2,"Hello world",{4.0,5.0,6.0}};
-        db.update_values("test1",t,"Field1,Field2,Field3,Field4,Field5,Field6");
+        db.update_values("test1",t,"i,f,s,x,y,z","Where i>0");
         
         db.update_values("test1",t,"Where i>0")
-        db.update_values("test1",t,"i,f,s,x,y,z","Where i>0");
-        db.update_values("test1",t,{0,1,2,3,4,5});
         
+        //min version function
+        db.update_values("test1",t)
+
+        //these three functions perform the same thing
+        db.update_values("test1",t,"i,f,s,x,y,z");
+        db.update_values("test1",t,{0,1,2,3,4,5});
         std::vector<std::string> v={"i","f","s","x","y","z"};
         db.update_values("test1",t,v);
     }  
