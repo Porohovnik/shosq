@@ -27,9 +27,9 @@ Header-only library ,with allocation memory  only for generating an sql query
         db.create_table<int,float,std::string,A>("test1",{"i","f","s","x","y","z"});
         
         //signature insert
-        //db.insert_select(name_table_in,data,column_order_in(optional));
+        //db.insert(name_table_in,data,column_order_in(optional));
         //column order can be one of three options:
-        //std::arry<int,N>
+        //std::array<int,N>
         //std::vector<std::string>
         //std::string
        
@@ -67,7 +67,7 @@ Header-only library ,with allocation memory  only for generating an sql query
         //signature insert_select
         //db.insert_select(name_table_in,column_order_in(optional),name_table_from,column_order_from(optional),rule_select(optional));
         //column order can be one of three options:
-        //std::arry<int,N>
+        //std::array<int,N>
         //std::vector<std::string>
         //std::string
         
@@ -77,5 +77,27 @@ Header-only library ,with allocation memory  only for generating an sql query
         std::vector<std::string> v={"s","f","i"};
         db.insert_select("test",{2,1,0},"test_",v,"Where i>5");
 
+    }  
+```
+### Example select
+```C++
+
+    
+    #include <shosq.h>
+    #include <string>
+    #include <vector>
+    #include <tuple>
+
+    int main(){
+        shosq::Data_base_management db("name_db.db");
+        
+        //signature 
+        //db.select(name_table_from,data_output,column_order_in(optional));
+        //type data_output: std::vector<std::tuple<Arg...>>
+        //column order can be one of three options:
+        //std::array<int,N>
+        //std::vector<std::string>
+        //std::string
+        
     }  
 ```
