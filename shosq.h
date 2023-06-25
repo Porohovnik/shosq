@@ -1,135 +1,26 @@
 #ifndef DOWNLOAD_MANAGEMENT_H
 #define DOWNLOAD_MANAGEMENT_H
 
-#include <glm/gtc/type_ptr.hpp>
 #include <sqlite3.h>
+#include <tuple_utl.h>
 
-#include <tuple>
-#include <type_traits>
 #include <vector>
 #include <array>
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <cassert>
 
-//#define SHOSQ_LOG_REQUEST_TO_CONSOLE;
+inline int tutl_LOG_REQUEST_TO_CONSOLE=1;
 
-namespace shosq {
-
-template <typename T,typename F, size_t... i>
-inline void tupleForeach(T&& t,F &&f, std::index_sequence<i...>) {
-   ((f(std::get<i>(std::forward<T>(t)))),...);
-}
-
-template <typename T,typename F>
-inline void TupleForeach(T&& t,F &&f) {
-    tupleForeach(std::forward<T>(t),std::forward<F>(f),std::make_index_sequence<std::tuple_size<std::remove_reference_t<T>>::value>());
-}
-
-template<typename T>
-constexpr T s(size_t i){
-    return {};
-};
-
-template<typename T,size_t ...i>
-constexpr auto _create_tuple(std::index_sequence<i...>){
-    return std::tuple_cat(std::make_tuple(s<T>(i))...);
-}
-template<int N,typename T>
-constexpr auto create_tuple(){
-    return _create_tuple<T>(std::make_index_sequence<N>());
-}
-
-template<typename T>
-constexpr T s(T t,size_t i){
-    return t;
-};
-
-template<typename ...T,size_t ...i>
-constexpr auto _create_tuple(std::tuple<T...> t,std::index_sequence<i...>){
-    return std::tuple_cat(s(t,i)...);
-}
-template<int N,typename ...T>
-constexpr auto create_tuple(T ...t){
-    auto tt=std::tuple_cat(std::make_tuple(t...));
-    if constexpr(N<0){
-        return std::tuple<>{};
-    }else{
-        return _create_tuple(tt,std::make_index_sequence<N>());
-    }
-}
-
-template<typename J,typename ...T,size_t ...i>
-constexpr auto tuple_to_array(std::tuple<T...> t,std::index_sequence<i...>){
-    return std::array<J,sizeof...(T)>{std::get<i>(t)...};
-}
-template<typename J,typename ...T>
-constexpr auto Tuple_to_array(std::tuple<T...> t){
-    return tuple_to_array<J>(t,std::make_index_sequence<sizeof...(T)>());
-}
-template<size_t ...i>
-constexpr auto make_index_to_array(std::index_sequence<i...>){
-    return std::array<int,sizeof...(i)>{i...};
-}
-template<int N>
-constexpr auto Make_index_to_array(){
-    if constexpr(N<0){
-        return std::tuple<>{};
-    }else{
-        return make_index_to_array(std::make_index_sequence<N>());
-    }
-}
-
-
-template<typename T>
-constexpr auto Type_to(T value){
-    return value;
-}
-
-template < template <typename...> class Template, typename T >
-struct is_instantiation_of_tuple : std::false_type {};
-
-template < template <typename...> class Template, typename... Args >
-struct is_instantiation_of_tuple< Template, Template<Args...> > : std::true_type {};
-
-
-template<typename T>
-constexpr auto Type_to_tuple(T value){
-    if constexpr(is_instantiation_of_tuple<std::tuple,decltype (Type_to<T>({}))>()){
-        return Type_to(value);
-    }else{
-        return std::tuple<T>(value);
-    }
-}
-
-
-template<typename T>
-uint constexpr _cout_arg(){
-    if constexpr(is_instantiation_of_tuple<std::tuple,T>()){
-        return std::tuple_size<T>();
-    }else{
-        return 1;
-    }
-}
-
-template<typename ...Arg>
-constexpr uint cout_arg(){
-    uint cout_arg__=sizeof...(Arg);
-    ((cout_arg__+=_cout_arg<decltype(Type_to(Arg{}))>()-1),...);
-    return  cout_arg__;
-}
-
-template<typename ...Arg>
-constexpr auto type_disclosure(){
-    return  std::tuple_cat(Type_to_tuple<Arg>({})...);
-}
-template<typename ...Arg>
-constexpr auto type_disclosure(Arg...arg){
-    return  std::tuple_cat(Type_to_tuple<Arg>(arg)...);
-}
+namespace tutl {
+using namespace tutl;
 
 template <typename T>
 constexpr uint defining_the_type(){
+    if constexpr(std::is_same<T,bool>()){
+        return SQLITE_INTEGER;
+    }
     if constexpr(std::is_same<T,int>()){
         return SQLITE_INTEGER;
     }
@@ -177,6 +68,7 @@ class Stmt{
 public:
     constexpr Stmt(){};
     Stmt(sqlite3 * db,std::string & sql_request,uint flag_=0){
+        //std::cout<<sql_request.data()<<std::endl;
         int err=sqlite3_prepare_v2(db,sql_request.data(),-1,&program,nullptr);
         if(err!=SQLITE_OK){
             std::cout<<"Error: "<<err<<" db: "<<sqlite3_errmsg(db)<<std::endl;
@@ -210,44 +102,47 @@ public:
             return 0;
         }
         return sqlite3_bind_blob(program,current_id++,&value,sizeof(value),nullptr);
-    };
+    }
 
     inline int Bind(){
         return sqlite3_bind_null(program,current_id++);
-    };
+    }
 
     inline int Bind(sqlite3_value* &&value){
         return sqlite3_bind_value(program,current_id++,std::forward<sqlite3_value*>(value));
-    };
+    }
+    inline int Bind(bool &&value){
+        return sqlite3_bind_int(program,current_id++,std::forward<bool>(value));
+    }
     inline int Bind(int &&value){
         return sqlite3_bind_int(program,current_id++,std::forward<int>(value));
-    };
+    }
     inline int Bind(float &&value){
         return sqlite3_bind_double(program,current_id++,static_cast<float>(std::forward<float>(value)));
-    };
+    }
     inline int Bind(double &&value){
         return sqlite3_bind_double(program,current_id++,std::forward<double>(value));
-    };
+    }
 
     inline int Bind(sqlite3_int64 &&value){
         return sqlite3_bind_int64(program,current_id++,std::forward<sqlite3_int64>(value));
-    };
+    }
     inline int Bind(char * &&value){
         return sqlite3_bind_text(program,current_id++,std::forward<char *>(value),-1,SQLITE_TRANSIENT);
-    };
+    }
     inline int Bind(std::string &&value){
         return sqlite3_bind_text(program,current_id++,std::forward<std::string>(value).data(),std::forward<std::string>(value).length(),SQLITE_TRANSIENT);
-    };
+    }
     inline int Bind(std::string_view value){
         return sqlite3_bind_text(program,current_id++,value.data(),-1,SQLITE_TRANSIENT);
-    };
+    }
 
     inline int Bind(wchar_t * &&value){
         return sqlite3_bind_text16(program,current_id++,std::forward<wchar_t *>(value),-1,SQLITE_TRANSIENT);
-    };
+    }
     inline int Bind(std::wstring &&value){
         return sqlite3_bind_text16(program,current_id++,std::forward<std::wstring>(value).data(),-1,SQLITE_TRANSIENT);
-    };
+    }
 
 
     template<typename T>
@@ -260,35 +155,37 @@ public:
             value=*reinterpret_cast<T*>(sqlite3_column_blob(program,current_id++-1));
         }
 
-    };
+    }
 
+    inline void Select(bool &value){
+        value=sqlite3_column_int(program,current_id++-1);
+    }
     inline void Select(int &value){
         value=sqlite3_column_int(program,current_id++-1);
-    };
+    }
 
     inline void Select(sqlite3_int64 &value){
         value=sqlite3_column_int64(program,current_id++-1);
-    };
+    }
     inline void Select(double &value){
         value=sqlite3_column_double(program,current_id++-1);
-    };
+    }
     inline void Select(float &value){
         value=sqlite3_column_double(program,current_id++-1);
-    };
+    }
     inline void Select(sqlite3_value * &value){
         value=sqlite3_column_value(program,current_id++-1);
-    };
+    }
     inline void Select(const unsigned char * &value){
         value=sqlite3_column_text(program,current_id++-1);
-    };
+    }
     inline void Select(std::string &value){
         if(auto vl=sqlite3_column_text(program,current_id++-1);vl!=nullptr){
             value=std::string{reinterpret_cast<const char *>(vl)};
         }else{
             value=std::string{};
         }
-    };
-
+    }
 
     void Select_name_collum(std::vector<std::string> &array){
         for(int i=0;i<sqlite3_column_count(program);i++){
@@ -393,6 +290,8 @@ public:
     inline std::string create_sql_request(Sql_request_info<SQLITE_CREATE_TABLE,cout_data> &info){
         std::string sql_request="CREATE TABLE ";
         std::string target_request="";
+        std::string cover="\"";
+        std::for_each(info.name_collums_array.begin(),info.name_collums_array.end(),[&cover](auto &value){value=cover+value+cover;});
 
         std::for_each(info.tins.begin(),info.tins.end()-1,[&](auto &value){value+=',';});
         target_request=create_target<cout_data>(info.name_collums_array,info.tins,info.ids);
@@ -411,7 +310,7 @@ class Data_base_management{
         if(Stmt_buffer.find(sql_request)==Stmt_buffer.end()){
             Stmt_buffer.try_emplace(sql_request,db,sql_request,flag_);
         }
-        #ifdef SHOSQ_LOG_REQUEST_TO_CONSOLE
+        #ifdef tutl_LOG_REQUEST_TO_CONSOLE
              std::cout<<"|"<<sql_request<<std::endl;
         #endif
         return Stmt_buffer[sql_request];
@@ -426,7 +325,7 @@ public:
         }else{
             static_assert (true,"encoding is not UTF8");
         }
-    };
+    }
     Data_base_management(std::basic_string_view<wchar_t> patch_db){
         if constexpr((encooding!=SQLITE_UTF8) && (flag!=(SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE))){
             static_assert (true,"the current version of sqlite does not allow using flags in sqlite3_open16. If you need to use flags, translate the encoding of the db path to UTF-8.");
@@ -436,7 +335,7 @@ public:
         }else{
             static_assert (true,"encoding is not UTF16");
         }
-    };
+    }
 
     ~Data_base_management(){
         if constexpr(encooding==SQLITE_UTF8){
@@ -445,13 +344,13 @@ public:
         if constexpr((encooding==SQLITE_UTF16)||(encooding==SQLITE_UTF16BE)||(encooding==SQLITE_UTF16LE)){
             sqlite3_close(db);
         }
-    };
+    }
 
     inline void stmt_request(std::string &&request){
         Stmt &stmt=add_stmt(db,std::forward<std::string>(request));
         stmt.use();
         stmt.reset();
-    };
+    }
 
     template<typename ...Arg>
     inline void stmt_request_bind(std::string &&request,std::tuple<Arg...> &&data){
@@ -459,7 +358,7 @@ public:
         TupleForeach(std::forward<decltype(data)>(data),[&stmt](auto &&value){stmt.Bind(Type_to(std::forward<decltype(value)>(value)));});
         stmt.use();
         stmt.reset();
-    };
+    }
     template<typename ...Arg>
     inline void stmt_request_select(std::string &&request,std::vector<std::tuple<Arg...>> &data){
         Stmt &stmt=add_stmt(db,std::forward<std::string>(request));
@@ -562,6 +461,10 @@ public:
             stmt_request(std::move(create_sql_request(info)));
         }
     };
+    template<typename ...Arg>
+    void create_table(std::string &name_table,std::vector<std::string> &name_collum, std::tuple<Arg...> &t){
+        create_table<Arg...>(name_table,name_collum);
+    }
 
     template<typename T,typename ...Arg>
     inline static constexpr bool is_type_allowed(){
@@ -597,7 +500,15 @@ public:
             insert_values<Arg...>(name_table,data,"");
     };
 
+    struct Base_tuple{};
 
+    template<typename ...Arg>
+    struct Tuple_R:public Base_tuple{
+        Tuple_R(){}
+        Tuple_R(std::tuple<Arg...> &&data):data_(std::forward<decltype (data)>(data)){}
+
+        std::tuple<Arg...> data_;
+    };
 
     template<int N,int K,typename T=std::array<int,N>,typename=std::enable_if_t<is_type_allowed<T,N>()>(),
                          typename J=std::array<int,K>,typename=std::enable_if_t<is_type_allowed<J,K>()>()>
@@ -637,10 +548,10 @@ public:
             info_insert.select_request=create_sql_request(info_select);
             stmt_request(std::move(create_sql_request(info_insert)));
         }
-    };
+    }
     void insert_select(std::string name_table_into,std::string name_table_from,std::string rule=""){
         insert_select<1,1>(name_table_into,"",name_table_from,"",rule);
-    };
+    }
     template<int N,typename T=std::array<int,N>>
     void insert_select(std::string name_table_into,T values_into,std::string name_table_from,std::string rule=""){
         insert_select<N,1>(name_table_into,values_into,name_table_from,"",rule);
@@ -656,7 +567,7 @@ public:
             stmt_request(sql_request);
             std::cout<<db<<sql_request<<std::endl;
         }
-    };
+    }
 
 
     template<typename ...Arg,typename T=std::array<int,cout_arg<Arg...>()>,typename=std::enable_if_t<is_type_allowed<T,Arg...>()>()>
@@ -704,7 +615,6 @@ public:
             Sql_request_info<SQLITE_SELECT,cout_arg<Arg...>()> info;
             info.name_table_in=name_table;
             info.rule=rule;
-
             if constexpr(std::is_same<std::array<int,cout_arg<Arg...>()>,T>()){
                 info.name_collums_array=get_name_collums(name_table);
                 info.ids=values;
@@ -719,24 +629,40 @@ public:
             stmt_request_select(std::move(create_sql_request(info)),data);
         }
         return data;
-    };
+    }
 
     template<typename ...Arg>
     std::vector<std::tuple<Arg...>> select(std::string name_table,std::string_view rule=""){
         return select<Arg...>(name_table,"",rule);
-    };
+    }
+
+    template<typename ...Arg,typename T=std::array<int,cout_arg<Arg...>()>,typename=std::enable_if_t<is_type_allowed<T,Arg...>()>()>
+    std::vector<std::tuple<Arg...>> select(std::string name_table,T values,std::tuple<Arg...> t,std::string_view rule=""){
+        return select<Arg...>(name_table,values,rule);
+    }
+
+
+    template<typename ...Arg>
+    std::vector<std::tuple<Arg...>> select(std::string name_table,std::tuple<Arg...>,std::string_view rule=""){
+        return select<Arg...>(name_table,"",rule);
+    }
+
+    template<typename ...Arg>
+    void select(std::string name_table,std::vector<std::tuple<Arg...>> &data,std::string_view rule=""){
+        data=select<Arg...>(name_table,"",rule);
+    }
 
     void delete_table(std::string name_table,std::string rule=""){
         if (name_table!=""){
             stmt_request("DROP TABLE "+name_table+" "+rule);
         }
-    };
+    }
 
     void delete_rows(std::string name_table,std::string rule){
         if (name_table!=""){
             stmt_request("DELETE FROM "+name_table+" "+rule);
         }
-    };
+    }
 
 };
 
