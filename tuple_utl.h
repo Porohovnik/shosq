@@ -4,16 +4,40 @@
 #include <tuple>
 #include <type_traits>
 #include <optional>
+#include <functional>
+#include <algorithm>
 
 using uint =unsigned int;
 
 namespace tutl {
-    template<size_t ...i>
-    constexpr auto char_to_array(const char * t,std::index_sequence<i...>){
-        return std::array<char,sizeof... (i)>{t[i]...};
+
+    template<typename T,typename M>
+    M& fun_void(M &m){
+        return m;
     }
 
-    template<int N,char const  *  t>
+
+    template<std::size_t Begin,std::size_t End,typename T, size_t ...i>
+    inline constexpr std::tuple<std::tuple_element_t<Begin+i,std::remove_pointer_t<T>>...> * get_arguments(std::index_sequence<i...>){
+        return nullptr;
+    };
+
+    template<std::size_t Begin,std::size_t End,typename ...Arg>
+    inline constexpr auto Get_arguments(){
+        return  get_arguments<Begin,End,std::tuple<Arg...>>(std::make_index_sequence<End-Begin>{});
+    }
+
+    template<std::size_t N,typename ...Arg>
+    inline constexpr auto Get_last_arguments(){
+        return  Get_arguments<sizeof... (Arg)-N,sizeof... (Arg),Arg...>();
+    }
+
+    template<std::size_t N,typename ...Arg>
+    inline constexpr auto Get_first_arguments(){
+        return  Get_arguments<0,N,Arg...>();
+    }
+
+    template<int N,char const t[]>
     constexpr int to_zero(){
         if constexpr (t[N]=='\0'){
             return N;
@@ -22,13 +46,32 @@ namespace tutl {
         }
     }
 
-    template< char const*  t>
+    template<char const t[],size_t ...i>
+    constexpr auto char_to_char(std::index_sequence<i...>){
+        constexpr char m[sizeof... (i)]={t[i]...};
+        return m;
+    }
+
+
+    template<char const t[]>
+    constexpr auto Char_to_char(){
+        return char_to_char(t,std::make_index_sequence<to_zero<0,t>()>());
+    }
+
+    template<size_t ...i>
+    constexpr auto char_to_array(const char t[],std::index_sequence<i...>){
+        return std::array<char,sizeof... (i)>{t[i]...};
+    }
+
+
+
+    template<char const t[]>
     constexpr auto Char_to_array(){
-        return char_to_array(t,std::make_index_sequence<to_zero<0,t>()>());
+        return char_to_array<t>(std::make_index_sequence<to_zero<0,t>()>());
     }
 
     template<std::size_t N>
-    constexpr auto Char_to_array(const char * t){
+    constexpr auto Char_to_array(const char t[]){
         return char_to_array(t,std::make_index_sequence<N>());
     }
 
@@ -178,6 +221,46 @@ namespace tutl {
     }
 
     template<typename Type,typename T>
+    constexpr auto * Get_tuple_type_element_t(T &s){
+        constexpr int id_element=Get_tuple_type_namber<std::remove_reference_t<T>,Type>();
+        if constexpr(id_element<0){
+            static_assert (id_element<0,";Error_tuple;" );
+            int * t=nullptr;
+            return t;
+        }else{
+            return &std::get<id_element>(s);
+        }
+    }
+
+
+    template <typename T,auto type, size_t... i>
+    constexpr inline int get_tuple_type_namber(std::index_sequence<i...>) noexcept{
+       int k=-1;
+       int j=-1;
+       auto t=std::make_tuple((std::tuple_element_t<i,std::remove_reference_t<T>>::type==type)...);
+       TupleForeach(t,[&k,&j](bool t){j++;(t==1)?k=j:k=k;});
+       return k;
+    }
+    template <typename T,auto type>
+    constexpr inline int Get_tuple_type_namber() noexcept{
+        return get_tuple_type_namber<T,type>(std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<T>>>());
+    }
+
+    template<auto type,typename T,typename K>
+    constexpr auto * Get_tuple_type_element(K &s){
+        constexpr int id_element=Get_tuple_type_namber<T,type>();
+        if constexpr(id_element<0){
+            static_assert (id_element<0,";Error_tuple;" );
+            int * t=nullptr;
+            return t;
+        }else{
+            return &std::get<id_element>(s);
+        }
+    }
+
+
+
+    template<typename Type,typename T>
     constexpr bool isGet_tuple_type_element(){
         constexpr int id_element=Get_tuple_type_namber<T,Type>();
         if constexpr(id_element<0){
@@ -297,6 +380,12 @@ namespace tutl {
 
 
 
+    template<auto indef,auto data_>
+    struct KAD{//Key_And_Data
+        static constexpr decltype (indef) type=indef;
+        static constexpr decltype (data_) data=data_;
+    };
+
     template<auto indef,typename Data>
     struct KAAT{//Key_And_Atribute_Type
         static constexpr decltype (indef) type=indef;
@@ -306,10 +395,11 @@ namespace tutl {
             data.emplace( data_ );
         }
     };
+
     template<typename T,typename Data>
     struct TAAT{//Type_And_Atribute_Type
         using type=T;
-        T Type();
+        static T Type();
         std::optional<Data> data;
 
         void inline set_data(Data & data_){
@@ -323,6 +413,10 @@ namespace tutl {
         std::tuple<Arg...> types{};
     public:
         Type_to_data(){}
+
+        template<typename F>
+        Type_to_data(F &f):types(fun_void<Arg>(f())...){}
+
         template<auto type,typename T>
         constexpr void set_data(T data_){
             TupleForeach(types,[ &data_](auto & t){
@@ -331,21 +425,49 @@ namespace tutl {
                 }
             });
         }
-        template<typename type,typename T>
+
+        template<typename Type,typename T>
         constexpr void set_data(T data_){
             TupleForeach(types,[ &data_](auto &t){
-                if constexpr(std::is_same<typename std::remove_reference_t<decltype (t)>::type,type>()){
+                if constexpr(std::is_same<typename std::remove_reference_t<decltype (t)>::type,Type>()){
                     t.set_data(data_);
                 }
             });
         }
 
+
+        template<auto type>
+        inline constexpr auto * get_element(){
+            return Get_tuple_type_element<type,std::tuple<Arg...>>(types);
+        }
+        template<auto type>
+        inline constexpr auto & get_element_data(){
+            return *Get_tuple_type_element<type,std::tuple<Arg...>>(types)->data;
+        }
+
         template<typename Type>
         constexpr auto * get_element(){
-           return Get_tuple_type_element<std::remove_reference_t<Type>,std::tuple<Arg...>>(types);
+           return Get_tuple_type_element<std::remove_reference_t<Type>,std::tuple<decltype(Arg::Type()) ...>>(types);
         }
+        template<typename Type>
+        constexpr auto & get_element_data(){
+           return *Get_tuple_type_element<std::remove_reference_t<Type>,std::tuple<decltype(Arg::Type()) ...>>(types)->data;
+        }
+
         constexpr auto & get_data(){ return types;}
     };
+
+    template<typename Array,typename ...Arg>
+    inline void array_to_for(Array & array,Arg &...arg){//синтаксический сахар
+        std::for_each(array.begin(),array.end(),[&arg...](auto &t){t(arg...);});
+    }
+
+
+    template<typename ...Arg>
+    inline std::function<void(Arg ...)>  get_to_for_array_fun(std::vector<std::function<void(Arg ...)>>  & array){//синтаксический сахар
+        return [array](Arg ...arg){array_to_for(array,arg...);};
+    }
+
 
 }
 #endif // TUPLE_UTL_H
